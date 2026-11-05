@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculator</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-950 flex items-center justify-center p-4">
+  <div class="w-full max-w-xs bg-slate-900 rounded-3xl shadow-2xl p-5 ring-1 ring-white/10">
+    <!-- Display -->
+    <div class="bg-slate-950 rounded-2xl px-4 py-5 mb-5 text-right">
+      <div id="expr" class="h-6 text-slate-400 text-sm truncate"></div>
+      <div id="display" class="text-white text-5xl font-light truncate">0</div>
+    </div>
+
+    <!-- Keypad -->
+    <div class="grid grid-cols-4 gap-3">
+      <button data-action="clear" class="key bg-slate-500 hover:bg-slate-400 text-slate-950">AC</button>
+      <button data-action="sign" class="key bg-slate-500 hover:bg-slate-400 text-slate-950">±</button>
+      <button data-action="back" class="key bg-slate-500 hover:bg-slate-400 text-slate-950">⌫</button>
+      <button data-op="/" class="key op bg-orange-500 hover:bg-orange-400 text-white">÷</button>
+
+      <button data-num="7" class="key bg-slate-700 hover:bg-slate-600 text-white">7</button>
+      <button data-num="8" class="key bg-slate-700 hover:bg-slate-600 text-white">8</button>
+      <button data-num="9" class="key bg-slate-700 hover:bg-slate-600 text-white">9</button>
+      <button data-op="*" class="key op bg-orange-500 hover:bg-orange-400 text-white">×</button>
+
+      <button data-num="4" class="key bg-slate-700 hover:bg-slate-600 text-white">4</button>
+      <button data-num="5" class="key bg-slate-700 hover:bg-slate-600 text-white">5</button>
+      <button data-num="6" class="key bg-slate-700 hover:bg-slate-600 text-white">6</button>
+      <button data-op="-" class="key op bg-orange-500 hover:bg-orange-400 text-white">−</button>
+
+      <button data-num="1" class="key bg-slate-700 hover:bg-slate-600 text-white">1</button>
+      <button data-num="2" class="key bg-slate-700 hover:bg-slate-600 text-white">2</button>
+      <button data-num="3" class="key bg-slate-700 hover:bg-slate-600 text-white">3</button>
+      <button data-op="+" class="key op bg-orange-500 hover:bg-orange-400 text-white">+</button>
+
+      <button data-num="0" class="key col-span-2 bg-slate-700 hover:bg-slate-600 text-white">0</button>
+      <button data-num="." class="key bg-slate-700 hover:bg-slate-600 text-white">.</button>
+      <button data-action="equals" class="key bg-emerald-500 hover:bg-emerald-400 text-white">=</button>
+    </div>
+  </div>
+
+  <style type="text/tailwindcss">
+    .key { @apply h-16 rounded-2xl text-2xl font-medium transition active:scale-95 select-none; }
+    .op.active { @apply bg-white text-orange-500; }
+  </style>
+
+  <script>
+    const displayEl = document.getElementById('display');
+    const exprEl = document.getElementById('expr');
+    const symbols = { '+': '+', '-': '−', '*': '×', '/': '÷' };
+
+    let current = '0';   // number being typed
+    let stored = null;   // first number
+    let op = null;       // chosen operator
+    let fresh = false;   // next digit starts a new number
+
+    function render() {
+      displayEl.textContent = current;
+      exprEl.textContent = stored !== null && op ? `${stored} ${symbols[op]}` : '';
+      document.querySelectorAll('.op').forEach(b =>
+        b.classList.toggle('active', b.dataset.op === op && fresh));
+    }
+
+    function inputNum(n) {
+      if (current === 'Error' || fresh) { current = '0'; fresh = false; }
+      if (n === '.' && current.includes('.')) return;
+      current = current === '0' && n !== '.' ? n : current + n;
+      render();
+    }
+
+    async function compute() {
+      const res = await fetch('/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ a: stored, b: current, op })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      return String(parseFloat(data.result.toPrecision(12)));
+    }
+
+    async function chooseOp(nextOp) {
+      if (current === 'Error') return;
+      if (op && !fresh) await equals(true);
+      if (current === 'Error') return;
+      stored = current;
+      op = nextOp;
+      fresh = true;
+      render();
+    }
+
+    async function equals(chaining = false) {
+      if (!op || stored === null) return;
+      const exprText = `${stored} ${symbols[op]} ${current} =`;
+      try {
+        current = await compute();
+      } catch (e) {
+        current = 'Error';
+        exprEl.textContent = e.message;
+        stored = null; op = null; fresh = true;
+        displayEl.textContent = current;
+        return;
+      }
+      stored = null; op = null; fresh = true;
+      render();
+      if (!chaining) exprEl.textContent = exprText;
+    }
+
+    function action(name) {
+      if (name === 'clear') { current = '0'; stored = null; op = null; fresh = false; }
+      if (name === 'sign' && current !== '0' && current !== 'Error') {
+        current = current.startsWith('-') ? current.slice(1) : '-' + current;
+      }
+      if (name === 'back' && !fresh && current !== 'Error') {
+        current = current.length > 1 && current !== '-0' ? current.slice(0, -1) : '0';
+        if (current === '-') current = '0';
+      }
+      if (name === 'equals') return equals();
+      render();
+    }
+
+    document.querySelectorAll('.key').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.num) inputNum(btn.dataset.num);
+        else if (btn.dataset.op) chooseOp(btn.dataset.op);
+        else action(btn.dataset.action);
+      });
+    });
+
+    // Keyboard support
+    document.addEventListener('keydown', e => {
+      if (/^[0-9.]$/.test(e.key)) inputNum(e.key);
+      else if (symbols[e.key]) chooseOp(e.key);
+      else if (e.key === 'Enter' || e.key === '=') { e.preventDefault(); action('equals'); }
+      else if (e.key === 'Backspace') action('back');
+      else if (e.key === 'Escape') action('clear');
+    });
+  </script>
+</body>
+</html>
