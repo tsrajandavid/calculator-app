@@ -2,7 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = process.env.PORT || 30200;
+const PORT = process.env.PORT || 3200;
 
 function calculate(a, b, op) {
   switch (op) {

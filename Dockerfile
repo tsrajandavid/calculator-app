@@ -3,5 +3,5 @@ WORKDIR /calculator
 COPY package.json ./
 COPY public ./public
 COPY server.js ./
-EXPOSE 30200
+EXPOSE 3200
 CMD ["node", "server.js"]
